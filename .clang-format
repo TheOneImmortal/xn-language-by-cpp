@@ -1,0 +1,191 @@
+BasedOnStyle: Google
+
+# 字符限制
+IndentWidth: 4
+TabWidth: 4
+UseTab: ForIndentation
+AccessModifierOffset: -2
+ColumnLimit: 72
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+LineEnding: LF
+ObjCBlockIndentWidth: 4
+PPIndentWidth: 4
+SpacesBeforeTrailingComments: 2
+
+# C++标准
+Standard: Latest
+
+# 对齐
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: Right
+AlignConsecutiveAssignments:
+  Enabled: true
+  AlignCompound: true
+  PadOperators: false
+AlignConsecutiveDeclarations: true
+AlignConsecutiveBitFields: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: true
+AlignEscapedNewlines: Left
+AlignOperands: AlignAfterOperator
+AlignTrailingComments: true
+
+# 允许函数参数在放在下一行
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+ObjCBreakBeforeNestedBlockParam: true
+
+# 允许放在同一行
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+#BreakAdjacentStringLiterals: false # clang-format 18
+BreakAfterAttributes: Never
+BreakArrays: false
+BreakBeforeBraces: Attach
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ObjCBinPackProtocolList: Auto
+PackConstructorInitializers: CurrentLine
+
+# 总是在template声明后换行
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeConceptDeclarations: Always
+RequiresClausePosition: OwnLine
+
+# 运算符换行
+BreakBeforeBinaryOperators: All
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
+
+# 各种换行
+BreakAfterJavaFieldAnnotations: true
+BreakStringLiterals: true
+CompactNamespaces: false
+ReflowComments: true
+VerilogBreakBetweenInstancePorts: true
+
+# 空格
+BitFieldColonSpacing: After
+Cpp11BracedListStyle: false
+SpaceAfterCStyleCast: true
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: false
+SpaceBeforeInheritanceColon: false
+SpaceBeforeJsonColon: false
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpacesInAngles: Never
+SpacesInContainerLiterals: false
+SpacesInLineCommentPrefix:
+  Minimum: 0
+  Maximum: -1
+SpacesInParens: Never
+SpacesInSquareBrackets: false
+
+# 空行
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: Always
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtEOF: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+SeparateDefinitionBlocks: Always
+
+# 缩进
+IndentAccessModifiers: false
+IndentCaseBlocks: false
+IndentCaseLabels: false
+IndentExternBlock: NoIndent
+IndentGotoLabels: true
+IndentPPDirectives: BeforeHash
+IndentRequiresClause: true
+IndentWrappedFunctionNames: false
+LambdaBodyIndentation: Signature
+NamespaceIndentation: Inner
+RequiresExpressionIndentation: OuterScope
+
+# 数字分隔符
+IntegerLiteralSeparator:
+  Binary: 3
+  BinaryMinDigits: 7
+  Decimal: 3
+  DecimalMinDigits: 5
+  Hex: 2
+  HexMinDigits: 6
+
+# 括号增删
+InsertBraces: false
+RemoveBracesLLVM: true
+RemoveParentheses: MultipleParentheses
+RemoveSemicolon: true
+
+# 自动注释
+FixNamespaceComments: true
+ShortNamespaceLines: 16
+
+# 描述具有特殊意义的注释的正则表达式，它不应该被分割为多行或以其它方式改变
+CommentPragmas: '^ IWYU pragma: '
+
+# include 排序
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:         '<[[:any:].]+>'
+    Priority:      -1
+#IncludeIsMainRegex: # 不会用
+#IncludeIsMainSourceRegex: # 不会用
+JavaImportGroups: ['com.example', 'com', 'org']
+JavaScriptWrapImports: true
+SortIncludes: CaseInsensitive
+SortJavaStaticImport: Before
+SortUsingDeclarations: LexicographicNumeric
+
+# 单双引号
+JavaScriptQuotes: Single
+
+# 智能分析
+DerivePointerAlignment: false
+DisableFormat: false
+ExperimentalAutoDetectBinPacking: false
+#SkipMacroDefinitionBody: false
+
+# 惩罚值
+#PenaltyBreakAssignment: 2
+#PenaltyBreakBeforeFirstCallParameter: 200
+#PenaltyBreakComment: 20
+#PenaltyBreakFirstLessLess: 40
+#PenaltyBreakOpenParenthesis: 800
+##PenaltyBreakScopeResolution: 10000
+#PenaltyBreakString: 200
+#PenaltyExcessCharacter: 100
+#PenaltyIndentedWhitespace: 20
+#PenaltyReturnTypeOnItsOwnLine: 1600
+
+# 修饰对齐
+PointerAlignment: Right
+QualifierAlignment: Custom
+QualifierOrder: ['static', 'constexpr', 'inline', 'type', 'const', 'volatile']
+ReferenceAlignment: Right
+
+# 弃用
+AlwaysBreakAfterDefinitionReturnType: None
+SpaceInEmptyParentheses: false
