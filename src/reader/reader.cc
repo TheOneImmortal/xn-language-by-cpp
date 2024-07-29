@@ -235,16 +235,89 @@ void Reader::read_symbol(Items &items) {
 
 			pop_char();
 			items.push_back(symbol);
+		} else if (c == '>') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::AroR);
+
+			pop_char();
+			items.push_back(symbol);
 		} else items.push_back(symbol);
 	} break;
-		READ_SYMBOL_CASE__SYMBOL_EQ('*', Muti, MutE);
+	case '|': {
+		Item symbol = {
+			.position_range = { pos, pos },
+			.value          = Item ::Symbol{ Item ::Symbol ::Orrr }
+		};
+		pop_char();
+		if (c == '=') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::OrrE);
+
+			pop_char();
+		} else if (c == '|') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::DOrr);
+			pop_char();
+			if (c == '=') {
+				symbol.position_range.end = pos;
+				symbol.value.emplace<Item ::Symbol>(
+				    Item ::Symbol ::DOrE);
+				pop_char();
+			}
+		}
+		items.push_back(symbol);
+	} break;
+	case '&': {
+		Item symbol = {
+			.position_range = { pos, pos },
+			.value          = Item ::Symbol{ Item ::Symbol ::Andd }
+		};
+		pop_char();
+		if (c == '=') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::AndE);
+
+			pop_char();
+		} else if (c == '&') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::DAnd);
+			pop_char();
+			if (c == '=') {
+				symbol.position_range.end = pos;
+				symbol.value.emplace<Item ::Symbol>(
+				    Item ::Symbol ::DAnE);
+				pop_char();
+			}
+		}
+		items.push_back(symbol);
+	} break;
+	case '*': {
+		Item symbol = {
+			.position_range = { pos, pos },
+			.value          = Item ::Symbol{ Item ::Symbol ::Muti }
+		};
+		pop_char();
+		if (c == '=') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::MutE);
+			pop_char();
+		} else if (c == '*') {
+			symbol.position_range.end = pos;
+			symbol.value.emplace<Item ::Symbol>(Item ::Symbol ::Powr);
+			pop_char();
+			if (c == '=') {
+				symbol.position_range.end = pos;
+				symbol.value.emplace<Item ::Symbol>(Item::Symbol::PowE);
+				pop_char();
+			}
+		}
+		items.push_back(symbol);
+	} break;
 		READ_SYMBOL_CASE__SYMBOL_EQ('/', Divd, DivE);
 		READ_SYMBOL_CASE__SYMBOL_EQ('%', Modu, ModE);
-		READ_SYMBOL_CASE__SYMBOL_EQ('|', Orrr, OrrE);
-		READ_SYMBOL_CASE__SYMBOL_EQ('&', Andd, AndE);
 		READ_SYMBOL_CASE__SYMBOL_EQ('^', Xorr, XorE);
 		READ_SYMBOL_CASE__SYMBOL_EQ('~', Oppo, OppE);
-		READ_SYMBOL_CASE__SYMBOL_EQ('!', Nott, NotE);
+		READ_SYMBOL_CASE__SYMBOL_EQ('!', Nott, NtEq);
 		READ_SYMBOL_CASE__SYMBOL_EQ('=', Equl, Same);
 		READ_SYMBOL_CASE__SYMBOL_EQ(':', DfTp, DfAt);
 

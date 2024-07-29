@@ -34,7 +34,6 @@ struct WordTableItem {
 		Muti,  // *
 		Divd,  // /
 		Powr,  // **
-		RoOp,  // //
 		Modu,  // %
 		Orrr,  // |
 		Andd,  // &
@@ -53,9 +52,12 @@ struct WordTableItem {
 		AndE,  // &=
 		XorE,  // ^=
 		OppE,  // ~=
-		NotE,  // !=
+		NtEq,  // !=
 		LMoE,  // <<=
 		RMoE,  // >>=
+		DAnE,  // &&=
+		DOrE,  // ||=
+		PowE,  // **=
 
 		Equl,  // =
 		Same,  // ==
@@ -63,6 +65,8 @@ struct WordTableItem {
 		Gret,  // >
 		LeEq,  // <=
 		GrEq,  // >=
+		DAnd,  // &&
+		DOrr,  // ||
 
 		PluS,  // ++
 		MinS,  // --
@@ -82,6 +86,7 @@ struct WordTableItem {
 
 		CGet,  // '
 		RGet,  // .
+		AroR,  // ->
 
 		Mayy,  // ?
 
@@ -108,6 +113,7 @@ struct WordTableItem {
 		For,
 		Step,
 		Break,
+		Return,
 
 		Case,
 
@@ -172,33 +178,37 @@ namespace internal {
             {Symbol::Muti,   "*"},
 		    {Symbol::Divd,   "/"},
             {Symbol::Powr,  "**"},
-		    {Symbol::RoOp,  "//"},
-            {Symbol::Modu,   "%"},
-		    {Symbol::Orrr,   "|"},
-            {Symbol::Andd,   "&"},
-		    {Symbol::Xorr,   "^"},
-            {Symbol::Oppo,   "~"},
-		    {Symbol::Nott,   "!"},
-            {Symbol::LMov,  "<<"},
-		    {Symbol::RMov,  ">>"},
-            {Symbol::PluE,  "+="},
-		    {Symbol::MinE,  "-="},
-            {Symbol::MutE,  "*="},
-		    {Symbol::DivE,  "/="},
-            {Symbol::ModE,  "%="},
-		    {Symbol::OrrE,  "|="},
-            {Symbol::AndE,  "&="},
-		    {Symbol::XorE,  "^="},
-            {Symbol::OppE,  "~="},
-		    {Symbol::NotE,  "!="},
-            {Symbol::LMoE, "<<="},
-		    {Symbol::RMoE, ">>="},
-            {Symbol::Equl,   "="},
-		    {Symbol::Same,  "=="},
-            {Symbol::Less,   "<"},
-		    {Symbol::Gret,   ">"},
-            {Symbol::LeEq,  "<="},
-		    {Symbol::GrEq,  ">="},
+		    {Symbol::Modu,   "%"},
+            {Symbol::Orrr,   "|"},
+		    {Symbol::Andd,   "&"},
+            {Symbol::Xorr,   "^"},
+		    {Symbol::Oppo,   "~"},
+            {Symbol::Nott,   "!"},
+		    {Symbol::LMov,  "<<"},
+            {Symbol::RMov,  ">>"},
+		    {Symbol::PluE,  "+="},
+            {Symbol::MinE,  "-="},
+		    {Symbol::MutE,  "*="},
+            {Symbol::DivE,  "/="},
+		    {Symbol::ModE,  "%="},
+            {Symbol::OrrE,  "|="},
+		    {Symbol::AndE,  "&="},
+            {Symbol::XorE,  "^="},
+		    {Symbol::OppE,  "~="},
+            {Symbol::NtEq,  "!="},
+		    {Symbol::LMoE, "<<="},
+            {Symbol::RMoE, ">>="},
+		    {Symbol::DAnE, "&&="},
+            {Symbol::DOrE, "||="},
+		    {Symbol::Equl,   "="},
+            {Symbol::Same,  "=="},
+		    {Symbol::Less,   "<"},
+            {Symbol::Gret,   ">"},
+		    {Symbol::LeEq,  "<="},
+            {Symbol::GrEq,  ">="},
+		    {Symbol::DAnd,  "&&"},
+            {Symbol::DOrr,  "||"},
+		    {Symbol::PowE,  "**"},
             {Symbol::PluS,  "++"},
 		    {Symbol::MinS,  "--"},
             {Symbol::ExpL,   "("},
@@ -213,51 +223,54 @@ namespace internal {
 		    {Symbol::Coma,   ","},
             {Symbol::CGet,   "'"},
 		    {Symbol::RGet,   "."},
-            {Symbol::Mayy,   "?"},
-		    {Symbol::Stri,  "\""},
-            {Symbol::CapS,   "`"},
-		    {Symbol::Poin,   "$"},
-            {Symbol::Bslh,  "\\"},
-		    {Symbol::Rang,  ".."},
-            {Symbol::Many, "..."},
-		    {Symbol::Attt,   "@"},
+            {Symbol::AroR,  "->"},
+		    {Symbol::Mayy,   "?"},
+            {Symbol::Stri,  "\""},
+		    {Symbol::CapS,   "`"},
+            {Symbol::Poin,   "$"},
+		    {Symbol::Bslh,  "\\"},
+            {Symbol::Rang,  ".."},
+		    {Symbol::Many, "..."},
+            {Symbol::Attt,   "@"},
     };
 
-	inline ::std::map<::std::string const, Keyword const> const
-	    str_keyword_map{
-		    {    "if",     Keyword::If},
-            {  "else",     Keyword::El},
-		    {  "elif",   Keyword::Elif},
-            { "while",  Keyword::While},
-		    {   "for",    Keyword::For},
-            {    "st",   Keyword::Step},
-		    { "break",  Keyword::Break},
-            {  "case",   Keyword::Case},
-		    {    "vr",     Keyword::Vr},
-            {    "fn",     Keyword::Fn},
-		    {    "mc",     Keyword::Mc},
-            {"inline", Keyword::Inline},
-		    {  "with",   Keyword::With},
-            {    "as",     Keyword::As},
-    };
+	inline ::std::map<::std::string const,
+	                  Keyword const> const str_keyword_map{
+		{    "if",     Keyword::If},
+        {  "else",     Keyword::El},
+		{  "elif",   Keyword::Elif},
+        { "while",  Keyword::While},
+		{   "for",    Keyword::For},
+        {    "st",   Keyword::Step},
+		{ "break",  Keyword::Break},
+        {"return", Keyword::Return},
+		{  "case",   Keyword::Case},
+        {    "vr",     Keyword::Vr},
+		{    "fn",     Keyword::Fn},
+        {    "mc",     Keyword::Mc},
+		{"inline", Keyword::Inline},
+        {  "with",   Keyword::With},
+		{    "as",     Keyword::As},
+	};
 
-	inline ::std::map<Keyword const, ::std::string const> const
-	    keyword_str_map{
-		    {    Keyword::If,     "if"},
-            {    Keyword::El,   "else"},
-		    {  Keyword::Elif,   "elif"},
-            { Keyword::While,  "while"},
-		    {   Keyword::For,    "for"},
-            {  Keyword::Step,     "st"},
-		    { Keyword::Break,  "break"},
-            {  Keyword::Case,   "case"},
-		    {    Keyword::Vr,     "vr"},
-            {    Keyword::Fn,     "fn"},
-		    {    Keyword::Mc,     "mc"},
-            {Keyword::Inline, "inline"},
-		    {  Keyword::With,   "with"},
-            {    Keyword::As,     "as"},
-    };
+	inline ::std::map<Keyword const,
+	                  ::std::string const> const keyword_str_map{
+		{    Keyword::If,     "if"},
+        {    Keyword::El,   "else"},
+		{  Keyword::Elif,   "elif"},
+        { Keyword::While,  "while"},
+		{   Keyword::For,    "for"},
+        {  Keyword::Step,     "st"},
+		{ Keyword::Break,  "break"},
+        {Keyword::Return, "return"},
+		{  Keyword::Case,   "case"},
+        {    Keyword::Vr,     "vr"},
+		{    Keyword::Fn,     "fn"},
+        {    Keyword::Mc,     "mc"},
+		{Keyword::Inline, "inline"},
+        {  Keyword::With,   "with"},
+		{    Keyword::As,     "as"},
+	};
 
 }
 

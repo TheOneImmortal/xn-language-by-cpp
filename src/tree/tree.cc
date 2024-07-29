@@ -140,18 +140,18 @@ bool Tree::just_skip_symbol(bool const             is_skip_line,
 			if (try_skip_symbol(false, WordItem::Symbol::Less)) {
 				names.push_back(TreeItem::BaseTemplatedName{
 				    .name = item.value, .templates = [this] {
-					    ::std::vector<TreeItem::Name> names;
+					    ::std::vector<TreeItem::Type> types;
 
 					    while (true) {
-						    auto name = try_build_name();
-						    if (!name.has_value()) break;
-						    names.push_back(*name);
+						    auto type = try_build_类型();
+						    if (!type.has_value()) break;
+						    types.push_back(::std::move(type.value()));
 
 						    if (!try_skip_symbol(
 						            true, WordItem::Symbol::Coma))
 							    break;
 					    }
-					    return names;
+					    return types;
 				    }() });
 
 				if (!try_skip_symbol(true, WordItem::Symbol::Gret))
@@ -173,10 +173,21 @@ bool Tree::just_skip_symbol(bool const             is_skip_line,
 
 	if (!pos.has_value()) return ::std::nullopt;
 
-	return TreeItem::Name{ .pos    = *pos,
-		                   .spaces = ::std::vector<TreeItem::BaseName>(
-		                       names.begin(), names.end() - 1),
-		                   .name = *(names.end() - 1) };
+	return TreeItem::Name{
+		.pos = *pos,
+		.spaces =
+		    [&] {
+		        ::std::vector<TreeItem::BaseName> spaces;
+		        i32                               count = 0;
+		        for (auto &name : names) {
+			        count++;
+			        if (count == names.size()) break;
+			        spaces.push_back(::std::move(name));
+		        }
+		        return spaces;
+		    }(),
+		.name = ::std::move(*(names.end() - 1))
+	};
 }
 
 void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
@@ -261,9 +272,9 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 		}
 		if (try_skip_symbol(false,
 		                    WordItem::Symbol::ExpL)) {  // (, 是函数调用
-			TreeItem::FnCall fn_call{ .fn_name = name.value() };
+			TreeItem::FnCall fn_call{ .fn_name
+				                      = ::std::move(name.value()) };
 
-			log::debug_log("fn[{}] call...", string(name.value()));
 			// 读取参数
 			if (try_skip_symbol(true, WordItem::Symbol::ExpR)) {
 				ret = (TreeItem::Exp)::std::move(fn_call);
@@ -284,7 +295,6 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 				if (try_skip_symbol(true, WordItem::Symbol::ExpR))
 					ret = (TreeItem::Exp)::std::move(fn_call);
 			}
-			log::debug_log("fn[{}] call finish", string(name.value()));
 		} else {
 			ret = (TreeItem::Exp)::std::move(name.value());
 		}
@@ -297,28 +307,49 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 		switch (item) {
 		case WordItem::Symbol::ExpL: {
 			i++;
-			auto exp = try_build_表达式();
-			if (exp.has_value()) ret = ::std::move(exp.value());
+			levels.push(0);
+			ret = try_build_表达式();
+			levels.pop();
 			if (!try_skip_symbol(true, WordItem::Symbol::ExpR))
 				expect_word_i_faild("构造表达式", "exp的)");
 		} break;
 		case WordItem::Symbol::CapS: {
 			i++;
+			levels.push(0);
 			auto cap_string = try_build_捕获字符串();
-
+			levels.pop();
 			ret = (TreeItem::Exp)::std::move(cap_string.value());
 		} break;
-#define BUILD_ONE_OP(symbol)                                   \
-	case WordItem::Symbol::symbol: {                           \
-		i++;                                                   \
-		auto exp = try_build_表达式();                         \
-		ret      = (TreeItem::Exp) TreeItem::Operation{        \
-			     .op  = WordItem::Symbol::symbol,              \
-			     .rhs = exp.has_value()                        \
-			              ? ::std::make_unique<TreeItem::Exp>( \
-                         ::std::move(exp.value()))        \
-			              : nullptr                            \
-		};                                                     \
+		case WordItem::Symbol::ArrL: {
+			i++;
+			levels.push(0);
+			auto arr = TreeItem::ArrayExp{};
+			while (true) {
+				auto exp = try_build_表达式();
+				if (!exp.has_value()) break;
+				arr.push_back(::std::move(exp.value()));
+				if (!try_skip_symbol(false, WordItem::Symbol::Coma))
+					break;
+				try_skip_whitespace(true);
+			}
+			levels.pop();
+			if (!try_skip_symbol(true, WordItem::Symbol::ArrR))
+				expect_word_i_faild("构造表达式", "exp的]");
+			ret = (TreeItem::Exp)::std::move(arr);
+		} break;
+#define BUILD_ONE_OP(symbol)                              \
+	case WordItem::Symbol::symbol: {                      \
+		i++;                                              \
+		levels.push(11);                                  \
+		auto exp = try_build_表达式();                    \
+		levels.pop();                                     \
+		ret = (TreeItem::Exp) TreeItem::Operation{        \
+			.op  = WordItem::Symbol::symbol,              \
+			.rhs = exp.has_value()                        \
+			         ? ::std::make_unique<TreeItem::Exp>( \
+			             ::std::move(exp.value()))        \
+			         : nullptr                            \
+		};                                                \
 	} break
 			BUILD_ONE_OP(Plus);
 			BUILD_ONE_OP(Minu);
@@ -331,7 +362,9 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 		case WordItem::Symbol::DfTp:
 		// 也许是流控制起始符，忽略不管
 		case WordItem::Symbol::Endd:
-			// 也许是某个流的结束，忽略不管
+		// 也许是某个流的结束，忽略不管
+		case WordItem::Symbol::ArrR:
+			// 也许是数组结束，忽略不管
 			break;
 		default: expect_word_i_faild("构造表达式", "exp");
 		}
@@ -343,58 +376,236 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 	else { expect_word_i_faild("构造表达式", "exp"); }
 	visit_word_i__end();
 
+	try_skip_whitespace(false);
+
+#define BUILD_OP2_WITH_LEVEL(my_level) \
+	BUILD_OP2_WITH_LEVEL2(my_level, my_level)
+#define BUILD_OP2_WITH_LEVEL2(in_level, out_level)        \
+	{                                                     \
+		if (levels.top() > in_level) break;               \
+		i++;                                              \
+		levels.push(out_level);                           \
+		auto rhs = try_build_表达式();                    \
+		levels.pop();                                     \
+		if (rhs.has_value()) is_continue = true;          \
+		ret = (TreeItem::Exp) TreeItem::Operation{        \
+			.op  = item,                                  \
+			.lhs = ret.has_value()                        \
+			         ? ::std::make_unique<TreeItem::Exp>( \
+			             ::std::move(ret.value()))        \
+			         : nullptr,                           \
+			.rhs = rhs.has_value()                        \
+			         ? ::std::make_unique<TreeItem::Exp>( \
+			             ::std::move(rhs.value()))        \
+			         : nullptr                            \
+		};                                                \
+	}                                                     \
+	break
+
+	bool is_continue = true;
+	while (is_continue) {
+		is_continue = false;
+		visit_word_i__start();
+		if_T_is(WordItem::Symbol) {
+			switch (item) {
+			case WordItem::Symbol::Same:
+			case WordItem::Symbol::NtEq:
+			case WordItem::Symbol::LeEq:
+			case WordItem::Symbol::GrEq: BUILD_OP2_WITH_LEVEL(1);
+
+			case WordItem::Symbol::DOrr: BUILD_OP2_WITH_LEVEL(2);
+			case WordItem::Symbol::DAnd: BUILD_OP2_WITH_LEVEL(3);
+
+			case WordItem::Symbol::Plus:
+			case WordItem::Symbol::Minu: BUILD_OP2_WITH_LEVEL(4);
+
+			case WordItem::Symbol::Muti:
+			case WordItem::Symbol::Divd:
+			case WordItem::Symbol::Modu: BUILD_OP2_WITH_LEVEL(5);
+
+			case WordItem::Symbol::LMov:
+			case WordItem::Symbol::RMov: BUILD_OP2_WITH_LEVEL(6);
+
+			case WordItem::Symbol::Orrr: BUILD_OP2_WITH_LEVEL(7);
+			case WordItem::Symbol::Andd: BUILD_OP2_WITH_LEVEL(8);
+			case WordItem::Symbol::Xorr: BUILD_OP2_WITH_LEVEL(9);
+
+			case WordItem::Symbol::Powr: BUILD_OP2_WITH_LEVEL(10);
+
+			case WordItem::Symbol::Rang: BUILD_OP2_WITH_LEVEL(11);
+
+			case WordItem::Symbol::DOrE:
+			case WordItem::Symbol::DAnE:
+			case WordItem::Symbol::PluE:
+			case WordItem::Symbol::MinE:
+			case WordItem::Symbol::MutE:
+			case WordItem::Symbol::DivE:
+			case WordItem::Symbol::ModE:
+			case WordItem::Symbol::LMoE:
+			case WordItem::Symbol::RMoE:
+			case WordItem::Symbol::OrrE:
+			case WordItem::Symbol::AndE:
+			case WordItem::Symbol::XorE:
+			case WordItem::Symbol::OppE:
+			case WordItem::Symbol::PowE:
+			case WordItem::Symbol::Equl: BUILD_OP2_WITH_LEVEL2(12, 0);
+
+			case WordItem::Symbol::RGet: BUILD_OP2_WITH_LEVEL(13);
+			default:
+			}
+		}
+		visit_word_i__end();
+	}
+
+	return ret;
+}
+
+::std::optional<TreeItem::Exp> Tree::try_build_表达式(
+    TreeItem::Name &&name) {
+	::std::optional<TreeItem::Exp> ret;
+
+	if (try_skip_symbol(false,
+	                    WordItem::Symbol::ExpL)) {  // (, 是函数调用
+		TreeItem::FnCall fn_call{ .fn_name = ::std::move(name) };
+
+		// 读取参数
+		if (try_skip_symbol(true, WordItem::Symbol::ExpR)) {
+			ret = (TreeItem::Exp)::std::move(fn_call);
+		} else {
+			while (true) {
+				auto param = try_build_表达式();
+				if (!param.has_value()) {
+					expect_word_i_faild("构造函数调用参数", "exp");
+					break;
+				}
+				fn_call.args.push_back(::std::move(param.value()));
+
+				if (!try_skip_symbol(false, WordItem::Symbol::Coma))
+					break;
+				try_skip_whitespace(true);
+			}
+
+			if (try_skip_symbol(true, WordItem::Symbol::ExpR))
+				ret = (TreeItem::Exp)::std::move(fn_call);
+		}
+	} else {
+		ret = (TreeItem::Exp)::std::move(name);
+	}
+
+	try_skip_whitespace(false);
+
+	bool is_continue = true;
+	while (is_continue) {
+		is_continue = false;
+		visit_word_i__start();
+		if_T_is(WordItem::Symbol) {
+			switch (item) {
+			case WordItem::Symbol::Same:
+			case WordItem::Symbol::NtEq:
+			case WordItem::Symbol::LeEq:
+			case WordItem::Symbol::GrEq: BUILD_OP2_WITH_LEVEL(1);
+
+			case WordItem::Symbol::DOrr: BUILD_OP2_WITH_LEVEL(2);
+			case WordItem::Symbol::DAnd: BUILD_OP2_WITH_LEVEL(3);
+
+			case WordItem::Symbol::Plus:
+			case WordItem::Symbol::Minu: BUILD_OP2_WITH_LEVEL(4);
+
+			case WordItem::Symbol::Muti:
+			case WordItem::Symbol::Divd:
+			case WordItem::Symbol::Modu: BUILD_OP2_WITH_LEVEL(5);
+
+			case WordItem::Symbol::LMov:
+			case WordItem::Symbol::RMov: BUILD_OP2_WITH_LEVEL(6);
+
+			case WordItem::Symbol::Orrr: BUILD_OP2_WITH_LEVEL(7);
+			case WordItem::Symbol::Andd: BUILD_OP2_WITH_LEVEL(8);
+			case WordItem::Symbol::Xorr: BUILD_OP2_WITH_LEVEL(9);
+
+			case WordItem::Symbol::Powr: BUILD_OP2_WITH_LEVEL(10);
+
+			case WordItem::Symbol::Rang: BUILD_OP2_WITH_LEVEL(11);
+
+			case WordItem::Symbol::DOrE:
+			case WordItem::Symbol::DAnE:
+			case WordItem::Symbol::PluE:
+			case WordItem::Symbol::MinE:
+			case WordItem::Symbol::MutE:
+			case WordItem::Symbol::DivE:
+			case WordItem::Symbol::ModE:
+			case WordItem::Symbol::LMoE:
+			case WordItem::Symbol::RMoE:
+			case WordItem::Symbol::OrrE:
+			case WordItem::Symbol::AndE:
+			case WordItem::Symbol::XorE:
+			case WordItem::Symbol::OppE:
+			case WordItem::Symbol::PowE:
+			case WordItem::Symbol::Equl: BUILD_OP2_WITH_LEVEL2(12, 0);
+
+			case WordItem::Symbol::RGet: BUILD_OP2_WITH_LEVEL(13);
+			default:
+			}
+		}
+		visit_word_i__end();
+	}
+
+	return ret;
+}
+
+::std::optional<TreeItem::Type> Tree::try_build_类型() {
+	::std::optional<TreeItem::Type> ret;
+	try_skip_whitespace(false);
 	visit_word_i__start();
-	if_T_is(WordItem::Symbol) {
-		if (item == WordItem::Symbol::Plus
-		    || item == WordItem::Symbol::Minu
-		    || item == WordItem::Symbol::Muti
-		    || item == WordItem::Symbol::Divd
-		    || item == WordItem::Symbol::Modu
-		    || item == WordItem::Symbol::Orrr
-		    || item == WordItem::Symbol::Andd
-		    || item == WordItem::Symbol::Xorr
-		    || item == WordItem::Symbol::LMov
-		    || item == WordItem::Symbol::RMov
-		    || item == WordItem::Symbol::PluE
-		    || item == WordItem::Symbol::MinE
-		    || item == WordItem::Symbol::MutE
-		    || item == WordItem::Symbol::DivE
-		    || item == WordItem::Symbol::ModE
-		    || item == WordItem::Symbol::OrrE
-		    || item == WordItem::Symbol::AndE
-		    || item == WordItem::Symbol::XorE
-		    || item == WordItem::Symbol::OppE
-		    || item == WordItem::Symbol::NotE
-		    || item == WordItem::Symbol::LMoE
-		    || item == WordItem::Symbol::RMoE
-		    || item == WordItem::Symbol::Equl
-		    || item == WordItem::Symbol::Same
-		    //|| item == WordItem::Symbol::Less
-		    //|| item == WordItem::Symbol::Gret
-		    || item == WordItem::Symbol::LeEq
-		    || item == WordItem::Symbol::GrEq
-		    || item == WordItem::Symbol::Powr
-		    || item == WordItem::Symbol::RoOp
-		    || item == WordItem::Symbol::Rang) {
+	if_T_is(WordItem::Name) {
+		ret = TreeItem::Type{
+			.is_mut = false,
+			.type
+			= TreeItem::SampleType{ .name = try_build_name().value_or(
+			                            TreeItem::Name{ .name = "_" }) }
+		};
+	}
+	elif_T_is(WordItem::Symbol) {
+		if (item == WordItem::Symbol::ArrL) {
 			i++;
-
-			auto rhs = try_build_表达式();
-
-			ret = (TreeItem::Exp) TreeItem::Operation{
-				.op  = item,
-				.lhs = ret.has_value()
-				         ? ::std::make_unique<TreeItem::Exp>(
-				             ::std::move(ret.value()))
-				         : nullptr,
-				.rhs = rhs.has_value()
-				         ? ::std::make_unique<TreeItem::Exp>(
-				             ::std::move(rhs.value()))
-				         : nullptr
+			ret = TreeItem::Type{
+				.is_mut = false,
+				.type
+				= TreeItem::ArrayType{ .type = [&] -> ::std::unique_ptr<
+				                                       TreeItem::Type> {
+				      auto type = try_build_类型();
+				      if (!type.has_value()) return nullptr;
+				      type->is_mut = true;
+				      return ::std::make_unique<TreeItem::Type>(
+				          ::std::move(type.value()));
+				  }() }
 			};
+			if (!try_skip_symbol(true, WordItem::Symbol::ArrR))
+				expect_word_i_faild("构造类型", "应当处理数组类型");
+		} else if (item == WordItem::Symbol::Oppo) {
+			i++;
+			auto type = try_build_类型();
+			if (!type.has_value()) return;
+			if (type.value().is_ref)
+				expect_word_i_faild("构造类型",
+				                    "不可用可变符修饰引用符");
+			ret = TreeItem::Type{ .is_mut = true,
+				                  .is_ref = false,
+				                  .type
+				                  = ::std::move(type.value().type) };
+		} else if (item == WordItem::Symbol::Andd) {
+			i++;
+			auto type = try_build_类型();
+			if (!type.has_value()) return;
+			ret = TreeItem::Type{ .is_mut = type.value().is_mut,
+				                  .is_ref = true,
+				                  .type
+				                  = ::std::move(type.value().type) };
+		} else {
+			expect_word_i_faild("构造类型", "应当处理类型");
 		}
 	}
+	else { expect_word_i_faild("构造类型", "应当处理类型"); }
 	visit_word_i__end();
-
 	return ret;
 }
 
@@ -417,27 +628,86 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 	visit_word_i__start();
 	if_T_is(WordItem::Symbol) {
 		if (item == WordItem::Symbol::DfTp) {
-			// FIXME: 处理显式类型定义
-			expect_word_i_faild(
-			    "构造变量定义",
-			    "应当处理显式类型定义，我还没写相关代码");
-		}
-		if (item == WordItem::Symbol::DfAt) {
+			i++;
+			try_skip_whitespace(false);
+
+			auto type = try_build_类型();
+			if (!type.has_value()) {
+				expect_word_i_faild("构造变量定义", "应当处理类型");
+				return;
+			}
+			ret = TreeItem::VarDef{ .name = ::std::move(var_names),
+				                    .type = ::std::move(type.value()) };
+
+			if (try_skip_symbol(false, WordItem::Symbol::Equl)) {
+				auto exp = try_build_表达式();
+				if (exp.has_value())
+					ret->value = ::std::move(exp.value());
+			}
+		} else if (item == WordItem::Symbol::DfAt) {
 			i++;
 			auto exp = try_build_表达式();
 			if (exp.has_value())
 				ret = TreeItem::VarDef{ .name = ::std::move(var_names),
-					                    .type
-					                    = TreeItem::Name{ .name = "_" },
 					                    .value
 					                    = ::std::move(exp.value()) };
 		} else expect_word_i_faild("构造变量定义", ":=");
 	}
+
 	if_T_is(WordItem::Whitespace) {
 		// FIXME: undef vr
 		expect_word_i_faild("构造变量定义",
 		                    "应当处理未undefvr，我还没写相关代码");
 	}
+
+	visit_word_i__end() expect_word_i_faild("构造变量定义", ":=");
+
+	return ret;
+}
+
+::std::optional<TreeItem::VarDef> Tree::try_build_变量定义(
+    TreeItem::Name &&name) {
+	::std::optional<TreeItem::VarDef> ret;
+
+	::std::vector<TreeItem::Name> var_names;
+
+	var_names.push_back(::std::move(name));
+
+	visit_word_i__start();
+	if_T_is(WordItem::Symbol) {
+		if (item == WordItem::Symbol::DfTp) {
+			i++;
+			try_skip_whitespace(false);
+
+			auto type = try_build_类型();
+			if (!type.has_value()) {
+				expect_word_i_faild("构造变量定义", "应当处理类型");
+				return;
+			}
+			ret = TreeItem::VarDef{ .name = ::std::move(var_names),
+				                    .type = ::std::move(type.value()) };
+
+			if (try_skip_symbol(false, WordItem::Symbol::Equl)) {
+				auto exp = try_build_表达式();
+				if (exp.has_value())
+					ret->value = ::std::move(exp.value());
+			}
+		} else if (item == WordItem::Symbol::DfAt) {
+			i++;
+			auto exp = try_build_表达式();
+			if (exp.has_value())
+				ret = TreeItem::VarDef{ .name = ::std::move(var_names),
+					                    .value
+					                    = ::std::move(exp.value()) };
+		} else expect_word_i_faild("构造变量定义", ":=");
+	}
+
+	if_T_is(WordItem::Whitespace) {
+		// FIXME: undef vr
+		expect_word_i_faild("构造变量定义",
+		                    "应当处理未undefvr，我还没写相关代码");
+	}
+
 	visit_word_i__end() expect_word_i_faild("构造变量定义", ":=");
 
 	return ret;
@@ -637,6 +907,22 @@ Tree::try_build_while循环流控制() {
 	return ret;
 }
 
+::std::optional<TreeItem::Process> Tree::try_build_语句(
+    TreeItem::Name &&name) {
+	::std::optional<TreeItem::Process> ret;
+	try_skip_whitespace(false);
+	visit_word_i__start();
+	if_T_is(WordItem::Symbol) {
+		if (item == WordItem::Symbol::DfTp
+		    || item == WordItem::Symbol::DfAt) {
+			ret = try_build_变量定义(::std::move(name));
+		} else ret = try_build_表达式(::std::move(name));
+	}
+	else { ret = try_build_表达式(::std::move(name)); }
+	visit_word_i__end() { ret = try_build_表达式(::std::move(name)); }
+	return ret;
+}
+
 ::std::optional<TreeItem::Process> Tree::try_build_语句() {
 	::std::optional<TreeItem::Process> ret;
 
@@ -644,8 +930,9 @@ Tree::try_build_while循环流控制() {
 
 	visit_word_i__start();
 	if_T_is(WordItem::Name) {
-		auto exp = try_build_表达式();
-		if (exp.has_value()) ret = ::std::move(exp.value());
+		auto name = try_build_name();
+		if (name.has_value())
+			ret = try_build_语句(::std::move(name.value()));
 	}
 	elif_T_is(WordItem::Keyword) {
 		switch (item) {
@@ -675,6 +962,10 @@ Tree::try_build_while循环流控制() {
 		case WordItem::Keyword::Break: {
 			i++;
 			ret = TreeItem::Break{};
+		} break;
+		case WordItem::Keyword::Return: {
+			i++;
+			ret = TreeItem::Return{ .value = try_build_表达式() };
 		} break;
 		default: expect_word_i_faild("构造语句", "流控制");
 		}
@@ -709,18 +1000,36 @@ void Tree::build_函数定义(Table &table) {
 
 	try_skip_whitespace(true);
 
-	// FIXME: read params
+	TreeItem::FnDef fn_def{ .name = ::std::move(fn_name.value()) };
+
+	bool is_continue_param = true;
+	while (is_continue_param) {
+		visit_word_i__start();
+		if_T_is(WordItem::Name) {
+			auto param = try_build_变量定义();
+			if (param.has_value())
+				fn_def.params.push_back(::std::move(param.value()));
+
+			if (!try_skip_symbol(true, WordItem::Symbol::Coma))
+				is_continue_param = false;
+			try_skip_whitespace(true);
+		}
+		else { is_continue_param = false; }
+		visit_word_i__end();
+	}
 
 	if (!try_skip_symbol(true, WordItem::Symbol::ExpR)) {
 		expect_word_i_faild("分析函数签名", ")");
 		return;
 	}
+
+	if (try_skip_symbol(false, WordItem::Symbol::AroR))
+		fn_def.ret = try_build_类型();
+
 	if (!try_skip_symbol(false, WordItem::Symbol::DfTp)) {
 		expect_word_i_faild("分析函数签名", ":");
 		return;
 	}
-
-	TreeItem::FnDef fn_def{ .name = fn_name.value() };
 
 	bool is_continue = true;
 	while (is_continue) {
@@ -731,7 +1040,7 @@ void Tree::build_函数定义(Table &table) {
 	}
 
 	if (!try_skip_symbol(true, WordItem::Symbol::Endd)) {
-		log::debug_log("fn[{}] def error", string(fn_name.value()));
+		log::debug_log("fn[{}] def error", string(fn_def.name));
 		expect_word_i_faild("分析函数语句", "各种语句");
 		// TODO:
 		// 这里应该跳过函数定义，直到函数结束，但是直接匹配';'可能会把流控制当作函数结束，所以这里需要更复杂的跳过逻辑。

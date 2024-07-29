@@ -30,21 +30,28 @@ using Word = table::WordTableItem;
 
 auto to_cpp(auto const &v) -> decltype(v) {
 	log::error_log("link error type [{}]", typeid(v).name());
+
+	auto b = int(v);
+
+	return v;
 }
 
+FN_to_cpp(Type);
 FN_to_cpp(BaseTemplatedName);
 FN_to_cpp(BaseName);
 FN_to_cpp(Name);
+FN_to_cpp(ArrayExp);
 FN_to_cpp(Exp);
 FN_to_cpp(FnCall);
-FN_to_cpp(Operation);
-FN_to_cpp(CapString);
-FN_to_cpp(VarDef);
-FN_to_cpp(FnDef);
+string to_cpp_op(Item ::Operation const &node);
+string to_cpp_cs(Item ::CapString const &node);
+string to_cpp_vr(Item ::VarDef const &node);
+string to_cpp_fn(Item ::FnDef const &node);
 FN_to_cpp(Break);
 FN_to_cpp(IfStream);
 FN_to_cpp(WhileStream);
 FN_to_cpp(ForStream);
+string to_cpp_rt(Item ::Return const &node);
 
 string to_cpp(Word::String const &node) {
 	return "\"" + node.value + "\"";
@@ -58,9 +65,8 @@ string to_cpp(Word::Number const &node) {
 	return s;
 }
 
-FN_to_cpp(BaseTemplatedName) {
-	::std::string ret = "";
-	ret              += "__xn" + node.name;
+string to_cpp_btn(Item::BaseTemplatedName const &node) {
+	::std::string ret = "__xn" + node.name;
 	if (!node.templates.empty()) {
 		ret += "__tp";
 		for (auto const &tem : node.templates) ret += to_cpp(tem);
@@ -70,10 +76,10 @@ FN_to_cpp(BaseTemplatedName) {
 }
 
 FN_to_cpp(BaseName) {
-	string ret = "";
+	string ret;
 	visit__start();
-	if_T_is(string) { ret += "__xn" + item; }
-	elif_T_is(Item::BaseTemplatedName) { ret += to_cpp(item); }
+	if_T_is(string) { ret = "__xn" + item; }
+	elif_T_is(Item::BaseTemplatedName) { ret = to_cpp_btn(item); }
 	visit__end(node);
 	return ret;
 }
@@ -85,15 +91,33 @@ FN_to_cpp(Name) {
 	return ret;
 }
 
+FN_to_cpp(Type) {
+	return [&] {
+		string s;
+		visit__start();
+		if_T_is(Item::SampleType) s  = to_cpp(item.name);
+		elif_T_is(Item::ArrayType) s = ::std::format(
+		    "__xnArray<{}>", (item.type ? to_cpp(*item.type) : ""));
+		visit__end(node.type);
+		return s;
+	}() + (node.is_mut ? "" : " const")
+	     + (node.is_ref ? "&" : "");
+}
+
+FN_to_cpp(ArrayExp) {
+	return ::std::format("{{{}}}", [&] {
+		string s;
+		for (auto const &exp : node) s += to_cpp(exp) + ",";
+		return s;
+	}());
+}
+
 FN_to_cpp(Exp) {
 	string ret = "";
 	visit__start();
-	if constexpr (requires { to_cpp(item); }) {
-		ret += to_cpp(item);
-	} else {
-		log::error_log("exp: unknown node type [{}]",
-		               typeid(item).name());
-	}
+	if_T_is(Item::Operation) ret   += to_cpp_op(item);
+	elif_T_is(Item::CapString) ret += to_cpp_cs(item);
+	else { ret += to_cpp(item); }
 	visit__end(node);
 	return ret;
 }
@@ -145,22 +169,29 @@ FN_to_cpp(FnCall) {
 		else return ::std::format("({}{})", op, to_cpp(*node.rhs)); \
 	} break
 
-FN_to_cpp(Operation) {
+string to_cpp_op(Item ::Operation const &node) {
 	switch (node.op) {
 		OPERATION_CASE__ONE(Oppo, '~');
 		OPERATION_CASE__ONE(Nott, '!');
 		OPERATION_CASE__ONE(PluS, "++");
 		OPERATION_CASE__ONE(MinS, "--");
+		OPERATION_CASE__TWO(Same, "==");
+		OPERATION_CASE__TWO(NtEq, "!=");
+		OPERATION_CASE__TWO(LeEq, "<=");
+		OPERATION_CASE__TWO(GrEq, ">=");
+		OPERATION_CASE__TWO(DAnd, "&&");
+		OPERATION_CASE__TWO(DOrr, "||");
 		OPERATION_CASE__ONE_OR_TWO(Plus, '+');
 		OPERATION_CASE__ONE_OR_TWO(Minu, '-');
 		OPERATION_CASE__TWO(Muti, '*');
 		OPERATION_CASE__TWO(Divd, '/');
 		OPERATION_CASE__TWO(Modu, '%');
-		OPERATION_CASE__TWO(Orrr, '|');
-		OPERATION_CASE__TWO(Andd, '&');
-		OPERATION_CASE__TWO(Xorr, '^');
 		OPERATION_CASE__TWO(LMov, "<<");
 		OPERATION_CASE__TWO(RMov, ">>");
+		OPERATION_CASE__TWO(Andd, '&');
+		OPERATION_CASE__TWO(Xorr, '^');
+		OPERATION_CASE__TWO(Orrr, '|');
+		OPERATION_CASE__TWO(Powr, "**");
 		OPERATION_CASE__TWO(PluE, "+=");
 		OPERATION_CASE__TWO(MinE, "-=");
 		OPERATION_CASE__TWO(MutE, "*=");
@@ -170,13 +201,30 @@ FN_to_cpp(Operation) {
 		OPERATION_CASE__TWO(AndE, "&=");
 		OPERATION_CASE__TWO(XorE, "^=");
 		OPERATION_CASE__TWO(OppE, "~=");
-		OPERATION_CASE__TWO(NotE, "!=");
 		OPERATION_CASE__TWO(LMoE, "<<=");
 		OPERATION_CASE__TWO(RMoE, ">>=");
 		OPERATION_CASE__TWO(Equl, "=");
-		OPERATION_CASE__TWO(Same, "==");
-		OPERATION_CASE__TWO(LeEq, "<=");
-		OPERATION_CASE__TWO(GrEq, ">=");
+	case Word ::Symbol ::RGet: {
+		if (!node.lhs) {
+			log ::error_log("error: {} has no lhs", ".");
+			return "NULL";
+		}
+		if (!node.rhs) {
+			log ::error_log("error: {} has no rhs", ".");
+			return "NULL";
+		}
+		string ret;
+		visit__start();
+		if_T_is(Item::FnCall) {
+			ret = to_cpp(*node.lhs) + "." + to_cpp(*node.rhs);
+		}
+		else {
+			ret = ::std::format("{}[{}]", to_cpp(*node.lhs),
+			                    to_cpp(*node.rhs));
+		}
+		visit__end(*node.rhs);
+		return ret;
+	} break;
 	case Word::Symbol::Rang: {
 		if (!node.lhs) {
 			log::error_log("error: .. has no lhs");
@@ -194,7 +242,7 @@ FN_to_cpp(Operation) {
 	return "NULL";
 }
 
-FN_to_cpp(CapString) {
+string to_cpp_cs(Item ::CapString const &node) {
 	return ::std::format("__xnto_string({})", [&] {
 		string s;
 		bool   is_first = true;
@@ -209,13 +257,17 @@ FN_to_cpp(CapString) {
 	}());
 }
 
-FN_to_cpp(VarDef) {
+string to_cpp_vr(Item ::VarDef const &node) {
 	return ::std::format(
 	    "{} {}{}",
 	    [&] -> string {
-		    string s = to_cpp(node.type);
-		    if (s == "__xn_") return "auto";
-		    else return s;
+		    if (node.type.has_value()) {
+			    string s = to_cpp(node.type.value());
+			    if (s == "__xn_") return "auto";
+			    else return s;
+		    } else {
+			    return "auto";
+		    }
 	    }(),
 	    [&] {
 		    string s        = "";
@@ -230,23 +282,32 @@ FN_to_cpp(VarDef) {
 	    node.value ? "=" + to_cpp(node.value.value()) : "");
 }
 
-FN_to_cpp(FnDef) {
+string to_cpp_fn(Item ::FnDef const &node) {
 	string ret = "";
 
-	if (string(node.name) == "main") ret = "int main(){\n";
-	else ret = "void " + to_cpp(node.name) + "(){\n";
+	if (string(node.name) == "main") ret = "int main(";
+	else
+		ret = (node.ret ? (to_cpp(node.ret.value()) + " ") : "void ")
+		    + (to_cpp(node.name) + "(");
+
+	bool is_first = true;
+	for (auto const &param : node.params) {
+		if (is_first) is_first = false;
+		else ret += ",";
+		ret += to_cpp_vr(param);
+	}
+
+	ret += "){\n";
 
 	for (auto const &stmt : node.body) {
 		visit__start();
-		if constexpr (::std::is_same_v<string,
-		                               decltype(to_cpp(item))>) {
-			ret += to_cpp(item) + ";";
-		} else {
-			log::error_log("unknown node type [{}]",
-			               typeid(item).name());
-		}
-
+		if_T_is(Item::FnDef) { ret += to_cpp_fn(item); }
+		elif_T_is(Item::VarDef) { ret += to_cpp_vr(item); }
+		elif_T_is(Item::Return) ret += to_cpp_rt(item);
+		else { ret += to_cpp(item); }
 		visit__end(stmt);
+
+		ret += ";";
 	}
 
 	ret += "}\n";
@@ -254,6 +315,11 @@ FN_to_cpp(FnDef) {
 }
 
 FN_to_cpp(Break) { return "break;"; }
+
+string to_cpp_rt(Item ::Return const &node) {
+	return ::std::format("return {}",
+	                     node.value ? to_cpp(node.value.value()) : "");
+}
 
 FN_to_cpp(IfStream) {
 	return ::std::format(
@@ -263,8 +329,11 @@ FN_to_cpp(IfStream) {
 		    string s;
 		    for (auto const &p : node.body) {
 			    visit__start();
-			    s += to_cpp(item) + ";";
-			    visit__end(p);
+			    if_T_is(Item::FnDef) s    += to_cpp_fn(item);
+			    elif_T_is(Item::VarDef) s += to_cpp_vr(item);
+			    elif_T_is(Item::Return) s += to_cpp_rt(item);
+			    else s += to_cpp(item); visit__end(p);
+			    s      += ";";
 		    }
 		    return s;
 	    }(),
@@ -290,8 +359,11 @@ FN_to_cpp(WhileStream) {
 		    string s;
 		    for (auto const &p : node.body) {
 			    visit__start();
-			    s += to_cpp(item) + ";";
-			    visit__end(p);
+			    if_T_is(Item::FnDef) s    += to_cpp_fn(item);
+			    elif_T_is(Item::VarDef) s += to_cpp_vr(item);
+			    elif_T_is(Item::Return) s += to_cpp_rt(item);
+			    else s += to_cpp(item); visit__end(p);
+			    s      += ";";
 		    }
 		    return s;
 	    }(),
@@ -326,8 +398,11 @@ FN_to_cpp(ForStream) {
 		    string s;
 		    for (auto const &p : node.body) {
 			    visit__start();
-			    s += to_cpp(item) + ";";
-			    visit__end(p);
+			    if_T_is(Item::FnDef) s    += to_cpp_fn(item);
+			    elif_T_is(Item::VarDef) s += to_cpp_vr(item);
+			    elif_T_is(Item::Return) s += to_cpp_rt(item);
+			    else s += to_cpp(item); visit__end(p);
+			    s      += ";";
 		    }
 		    return s;
 	    }(),
@@ -356,7 +431,7 @@ void CppGen::gen(Item::Command const &node) {
 		if (strs[0] == "import") {
 			if (strs.size() >= 2)
 				if (strs[1] == "io") {
-					output << R"(#include <iostream>
+					output << R"(#include<iostream>
 template<typename...Ts>constexpr auto __xnio__xnout(Ts const&...v){
 ((::std::cout << v), ...);::std::cout << ::std::endl;};
 __xni32 __xnio__xnin__tp__xni32__pt(){__xni32 __xnv;::std::cin>>__xnv;return __xnv;})"
@@ -373,29 +448,13 @@ __xni32 __xnio__xnin__tp__xni32__pt(){__xni32 __xnv;::std::cin>>__xnv;return __x
 }
 
 void CppGen::gen(Item::FnDef const &node) {
-	if (string(node.name) == "main")
-		output << "int main(){" << ::std::endl;
-	else output << "void " << to_cpp(node.name) << "(){" << ::std::endl;
-
-	for (auto const &stmt : node.body) {
-		visit__start();
-		if constexpr (::std::is_same_v<string,
-		                               decltype(to_cpp(item))>) {
-			output << to_cpp(item) << ";" << ::std::endl;
-		} else {
-			log::error_log("unknown node type [{}]",
-			               typeid(item).name());
-		}
-
-		visit__end(stmt);
-	}
-
-	output << "}" << ::std::endl;
+	output << to_cpp_fn(node) << ::std::endl;
 }
 
 void CppGen::gen() {
-	output << R"(#include <iterator>
-#include <sstream>
+	output << R"(#include<iterator>
+#include<sstream>
+#include<vector>
 using __xni32=int;
 template<typename T>struct __xnRange__xnIter{
 using value_type=T;
@@ -415,7 +474,14 @@ __xnRange__xnIter<T>end(){return __xnRange__xnIter<T>(r);}};
 template<typename T>__xnRange<T>__xnrange(T const&l, T const&r){
 return l<=r?__xnRange<T>{l,r}:__xnRange<T>{r,l};}
 template<typename...Ts>auto __xnto_string(Ts const&...v){
-::std::ostringstream __xnoss;((__xnoss<<v),...);return __xnoss.str();};)"
+::std::ostringstream __xnoss;((__xnoss<<v),...);return __xnoss.str();};
+template<typename T>struct __xnArray{
+::std::vector<T>value;
+__xnArray():value(){};
+__xnArray(::std::initializer_list<T>const&v):value{v}{};
+__xni32 __xnsize()const{return value.size();}
+T const&operator[](__xni32 const&i)const{return value[i];}
+T&operator[](__xni32 const&i){return value[i];}};)"
 	       << ::std::endl;
 
 	for (auto const &node : tree_table.items) {

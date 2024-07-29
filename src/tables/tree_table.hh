@@ -30,10 +30,11 @@ struct TreeTableItem {
 	struct Name;
 	struct BaseTemplatedName;
 	using BaseName = ::std::variant<string, BaseTemplatedName>;
+	struct Type;
 
 	struct BaseTemplatedName {
 		string              name;
-		::std::vector<Name> templates;
+		::std::vector<Type> templates;
 	};
 
 	struct Name {
@@ -86,15 +87,31 @@ struct TreeTableItem {
 		}
 	};
 
+	struct SampleType {
+		Name name;
+	};
+
+	struct ArrayType {
+		::std::unique_ptr<Type> type;
+	};
+
+	struct Type {
+		bool                                  is_mut = false;
+		bool                                  is_ref = false;
+		::std::variant<SampleType, ArrayType> type;
+	};
+
+	struct ArrayExp: public ::std::vector<Exp> {};
+
 	struct Exp
 	    : public ::std::variant<Name, WordItem::String,
 	                            WordItem::Number, FnCall, Operation,
-	                            CapString> {};
+	                            CapString, ArrayExp> {};
 
 	struct VarDef {
-		::std::vector<Name>  name;
-		Name                 type;
-		::std::optional<Exp> value;
+		::std::vector<Name>   name;
+		::std::optional<Type> type;
+		::std::optional<Exp>  value;
 
 		operator string() const {
 			return ::std::format("vr[{}]",
@@ -119,21 +136,34 @@ struct TreeTableItem {
 	struct ForStream;
 	struct FnDef;
 	struct Break;
-	using Process = ::std::variant<FnDef, VarDef, Exp, IfStream,
-	                               WhileStream, ForStream, Break>;
+	struct Return;
+	using Process
+	    = ::std::variant<FnDef, VarDef, Exp, IfStream, WhileStream,
+	                     ForStream, Break, Return>;
 	using ProcessStream
 	    = ::std::variant<Exp, IfStream, WhileStream, ForStream>;
 
 	struct Break {};
 
+	struct Return {
+		::std::optional<Exp> value;
+	};
+
 	struct FnDef {
 		Name                   name;
 		::std::vector<VarDef>  params;
 		::std::vector<Process> body;
+		::std::optional<Type>  ret;
 
 		operator string() const {
-			string s = ::std::format("{:{}}fn: {}\n", " ", indent,
-			                         string(name));
+			string s = ::std::format(
+			    "{:{}}fn({}): {}\n", " ", indent,
+			    [&] {
+				    string s;
+				    for (auto const &p : params) s += string(p) + ", ";
+				    return s;
+			    }(),
+			    string(name));
 
 			indent += 4;
 			for (auto &p : body) s += to_string(p) + "\n";
