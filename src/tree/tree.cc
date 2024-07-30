@@ -364,9 +364,9 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 		case WordItem::Symbol::Endd:
 		// 也许是某个流的结束，忽略不管
 		case WordItem::Symbol::ArrR:
-			// 也许是数组结束，忽略不管
-			break;
-		default: expect_word_i_faild("构造表达式", "exp");
+		// 也许是数组结束，忽略不管
+		case WordItem::Symbol::Mayy: break;
+		default                    : expect_word_i_faild("构造表达式", "exp");
 		}
 	}
 	elif_T_is(WordItem::Number) {
@@ -567,18 +567,23 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 	elif_T_is(WordItem::Symbol) {
 		if (item == WordItem::Symbol::ArrL) {
 			i++;
-			ret = TreeItem::Type{
-				.is_mut = false,
-				.type
-				= TreeItem::ArrayType{ .type = [&] -> ::std::unique_ptr<
-				                                       TreeItem::Type> {
-				      auto type = try_build_类型();
-				      if (!type.has_value()) return nullptr;
-				      type->is_mut = true;
-				      return ::std::make_unique<TreeItem::Type>(
-				          ::std::move(type.value()));
-				  }() }
-			};
+			auto type = try_build_类型();
+			if (!type.has_value()) {
+				expect_word_i_faild("构造数组类型",
+				                    "数组里面的类型呢？");
+				return;
+			}
+
+			// XXX:
+			// 这里的可变提升是对C++的::std::vector的适配，将来可能需要修改
+			auto array_is_mut = type->is_mut;
+			type->is_mut      = true;
+
+			ret = TreeItem::Type{ .is_mut = array_is_mut,
+				                  .type   = TreeItem::ArrayType{
+				                        .type = ::std::make_unique<
+                                          TreeItem::Type>(::std::move(
+                                          type.value())) } };
 			if (!try_skip_symbol(true, WordItem::Symbol::ArrR))
 				expect_word_i_faild("构造类型", "应当处理数组类型");
 		} else if (item == WordItem::Symbol::Oppo) {
@@ -755,7 +760,11 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 				    ::std::move(else_if.value()));
 			}
 		} else {
-			expect_word_i_faild("构造流控制else", "if|exp");
+			auto exp = try_build_表达式();
+			if (exp.has_value())
+				ret = try_build_else__表达式_x(
+				    ::std::move(exp.value()));
+			else expect_word_i_faild("构造流控制else", "if|exp");
 		}
 	}
 	elif_T_is(WordItem::Whitespace) {
@@ -763,10 +772,9 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 	}
 	else {
 		auto exp = try_build_表达式();
-		if (exp.has_value()) {
-			ret = ::std::make_unique<TreeItem::ProcessStream>(
-			    ::std::move(exp.value()));
-		} else expect_word_i_faild("构造流控制else", "if|exp");
+		if (exp.has_value())
+			ret = try_build_else__表达式_x(::std::move(exp.value()));
+		else expect_word_i_faild("构造流控制else", "if|exp");
 	}
 	visit_word_i__end();
 
@@ -787,6 +795,23 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 		if (try_skip_symbol(true, WordItem::Symbol::Endd))
 			ret.else_body = try_build_else流();
 	} else expect_word_i_faild("构造条件流控制", ":");
+
+	return ::std::make_optional(::std::move(ret));
+}
+
+::std::optional<TreeItem::IfStream> Tree::try_build_条件流控制(
+    TreeItem::Exp &&cond) {
+	TreeItem::IfStream ret{ .cond = ::std::move(cond) };
+
+	bool is_continue = true;
+	while (is_continue) {
+		auto process = try_build_语句();
+		if (process.has_value())
+			ret.body.push_back(::std::move(process.value()));
+		else is_continue = false;
+	}
+	if (try_skip_symbol(true, WordItem::Symbol::Endd))
+		ret.else_body = try_build_else流();
 
 	return ::std::make_optional(::std::move(ret));
 }
@@ -907,6 +932,30 @@ Tree::try_build_while循环流控制() {
 	return ret;
 }
 
+::std::unique_ptr<TreeItem::ProcessStream>
+Tree::try_build_else__表达式_x(TreeItem::Exp &&exp) {
+	::std::optional<TreeItem::ProcessStream> ret;
+	if (try_skip_symbol(false, WordItem::Symbol::Mayy))
+		if (try_skip_symbol(false, WordItem::Symbol::DfTp))
+			ret = try_build_条件流控制(::std::move(exp));
+		else expect_word_i_faild("问号语句解析", ":");
+	else ret = TreeItem::ProcessStream{ ::std::move(exp) };
+	return ret ? ::std::make_unique<TreeItem::ProcessStream>(
+	           ::std::move(ret.value()))
+	           : nullptr;
+}
+
+::std::optional<TreeItem::Process> Tree::try_build_语句__表达式_x(
+    TreeItem::Exp &&exp) {
+	::std::optional<TreeItem::Process> ret;
+	if (try_skip_symbol(false, WordItem::Symbol::Mayy))
+		if (try_skip_symbol(false, WordItem::Symbol::DfTp))
+			ret = try_build_条件流控制(::std::move(exp));
+		else expect_word_i_faild("问号语句解析", ":");
+	else ret = TreeItem::Process{ ::std::move(exp) };
+	return ret;
+}
+
 ::std::optional<TreeItem::Process> Tree::try_build_语句(
     TreeItem::Name &&name) {
 	::std::optional<TreeItem::Process> ret;
@@ -916,10 +965,23 @@ Tree::try_build_while循环流控制() {
 		if (item == WordItem::Symbol::DfTp
 		    || item == WordItem::Symbol::DfAt) {
 			ret = try_build_变量定义(::std::move(name));
-		} else ret = try_build_表达式(::std::move(name));
+		} else {
+			auto exp = try_build_表达式(::std::move(name));
+			if (exp.has_value())
+				ret = try_build_语句__表达式_x(
+				    ::std::move(exp.value()));
+		}
 	}
-	else { ret = try_build_表达式(::std::move(name)); }
-	visit_word_i__end() { ret = try_build_表达式(::std::move(name)); }
+	else {
+		auto exp = try_build_表达式(::std::move(name));
+		if (exp.has_value())
+			ret = try_build_语句__表达式_x(::std::move(exp.value()));
+	}
+	visit_word_i__end() {
+		auto exp = try_build_表达式(::std::move(name));
+		if (exp.has_value())
+			ret = try_build_语句__表达式_x(::std::move(exp.value()));
+	}
 	return ret;
 }
 
@@ -974,9 +1036,13 @@ Tree::try_build_while循环流控制() {
 		if (item == WordItem::Symbol::Plus
 		    || item == WordItem::Symbol::Minu
 		    || item == WordItem::Symbol::PluS
-		    || item == WordItem::Symbol::MinS) {
+		    || item == WordItem::Symbol::MinS
+		    || item == WordItem::Symbol::Oppo
+		    || item == WordItem::Symbol::Nott) {
 			auto exp = try_build_表达式();
-			if (exp.has_value()) ret = ::std::move(exp.value());
+			if (exp.has_value())
+				ret = try_build_语句__表达式_x(
+				    ::std::move(exp.value()));
 		} else if (item != WordItem::Symbol::Endd)
 			expect_word_i_faild("构造语句", ";");
 	}
@@ -1078,6 +1144,7 @@ void Tree::build_仙言(Table &table) {
 			}
 		}
 		elif_T_is(WordItem::Whitespace) { i++; }
+		elif_T_is(WordItem::Name) { build_函数定义(table); }
 		else {
 			expect_word_i_faild("分析仙言", "command|define");
 			just_skip_line();

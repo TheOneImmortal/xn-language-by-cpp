@@ -37,6 +37,7 @@ auto to_cpp(auto const &v) -> decltype(v) {
 }
 
 FN_to_cpp(Type);
+string to_cpp_inname(Item ::Type const &node);
 FN_to_cpp(BaseTemplatedName);
 FN_to_cpp(BaseName);
 FN_to_cpp(Name);
@@ -69,7 +70,8 @@ string to_cpp_btn(Item::BaseTemplatedName const &node) {
 	::std::string ret = "__xn" + node.name;
 	if (!node.templates.empty()) {
 		ret += "__tp";
-		for (auto const &tem : node.templates) ret += to_cpp(tem);
+		for (auto const &tem : node.templates)
+			ret += to_cpp_inname(tem);
 		ret += "__pt";
 	}
 	return ret;
@@ -102,6 +104,22 @@ FN_to_cpp(Type) {
 		return s;
 	}() + (node.is_mut ? "" : " const")
 	     + (node.is_ref ? "&" : "");
+}
+
+string to_cpp_inname(Item ::Type const &node) {
+	return [&] {
+		string s;
+		visit__start();
+		if_T_is(Item::SampleType) s  = to_cpp(item.name);
+		elif_T_is(Item::ArrayType) s = ::std::format(
+		    "__xnArray__tp{}__tp",
+		    (item.type ? to_cpp_inname(*item.type) : ""));
+		visit__end(node.type);
+		return s;
+	}();
+	// + (node.is_mut ? "" : "")
+	// + (node.is_ref ? "&" : "");
+	// XXX: 修饰暂时不加入名字，为了与C++适配
 }
 
 FN_to_cpp(ArrayExp) {
@@ -433,7 +451,7 @@ void CppGen::gen(Item::Command const &node) {
 				if (strs[1] == "io") {
 					output << R"(#include<iostream>
 template<typename...Ts>constexpr auto __xnio__xnout(Ts const&...v){
-((::std::cout << v), ...);::std::cout << ::std::endl;};
+((::std::cout << v),...);};
 __xni32 __xnio__xnin__tp__xni32__pt(){__xni32 __xnv;::std::cin>>__xnv;return __xnv;})"
 					       << ::std::endl;
 				} else
@@ -465,14 +483,14 @@ using iterator_category=std::input_iterator_tag;
 explicit __xnRange__xnIter(T begin):v(begin){}
 reference operator*(){return v;}
 __xnRange__xnIter&operator++(){++v;return*this;}
-bool operator==(__xnRange__xnIter const&other)const{return v==other.v;}
-bool operator!=(__xnRange__xnIter const&other)const{return!(v==other.v);}
+bool operator==(__xnRange__xnIter const&other)const{return!(v<other.v);}
+bool operator!=(__xnRange__xnIter const&other)const{return v<other.v;}
 T v;};
 template<typename T>struct __xnRange{T l,r;
 __xnRange__xnIter<T>begin(){return __xnRange__xnIter<T>(l);}
 __xnRange__xnIter<T>end(){return __xnRange__xnIter<T>(r);}};
 template<typename T>__xnRange<T>__xnrange(T const&l, T const&r){
-return l<=r?__xnRange<T>{l,r}:__xnRange<T>{r,l};}
+return __xnRange<T>{l,r};}
 template<typename...Ts>auto __xnto_string(Ts const&...v){
 ::std::ostringstream __xnoss;((__xnoss<<v),...);return __xnoss.str();};
 template<typename T>struct __xnArray{
@@ -481,7 +499,8 @@ __xnArray():value(){};
 __xnArray(::std::initializer_list<T>const&v):value{v}{};
 __xni32 __xnsize()const{return value.size();}
 T const&operator[](__xni32 const&i)const{return value[i];}
-T&operator[](__xni32 const&i){return value[i];}};)"
+T&operator[](__xni32 const&i){return value[i];}
+void __xnpush_back(T const&v){value.push_back(v);}};)"
 	       << ::std::endl;
 
 	for (auto const &node : tree_table.items) {

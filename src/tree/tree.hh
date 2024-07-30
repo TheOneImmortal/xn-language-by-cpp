@@ -61,13 +61,19 @@ class Tree {
 	::std::optional<TreeItem::VarDef> try_build_变量定义();
 	::std::optional<TreeItem::VarDef> try_build_变量定义(
 	    TreeItem::Name &&name);
+	::std::unique_ptr<TreeItem::ProcessStream> try_build_else__表达式_x(
+	    TreeItem::Exp &&exp);
 	::std::unique_ptr<TreeItem::ProcessStream> try_build_else流();
 	::std::optional<TreeItem::IfStream> try_build_条件流控制();
+	::std::optional<TreeItem::IfStream> try_build_条件流控制(
+	    TreeItem::Exp &&cond);
 	::std::optional<TreeItem::WhileStream> try_build_while循环流控制();
 	::std::optional<TreeItem::ForStream> try_build_for循环流控制();
-	::std::optional<TreeItem::Process>   try_build_语句();
-	::std::optional<TreeItem::Process>   try_build_语句(
-	      TreeItem::Name &&name);
+	::std::optional<TreeItem::Process>   try_build_语句__表达式_x(
+	      TreeItem::Exp &&exp);
+	::std::optional<TreeItem::Process> try_build_语句();
+	::std::optional<TreeItem::Process> try_build_语句(
+	    TreeItem::Name &&name);
 
 	void build_仙言(Table &table);
 	void build_命令(WordItem::Symbol const &now, Table &table);
