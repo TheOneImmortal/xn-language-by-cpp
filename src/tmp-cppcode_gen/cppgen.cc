@@ -1,5 +1,6 @@
 #include "cppgen.hh"
 
+#include <filesystem>
 #include <utility>
 
 #include "../log/log.hh"
@@ -515,7 +516,8 @@ void __xnpush_back(T const&v){value.push_back(v);}};)"
 	}
 }
 
-void cpp_gen(string output_file, table::TreeTable const &tree_table) {
+void cpp_gen(::std::filesystem::path output_file,
+             table::TreeTable const &tree_table) {
 	CppGen cppgen{ output_file, tree_table };
 	cppgen.gen();
 }

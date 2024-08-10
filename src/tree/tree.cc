@@ -434,6 +434,7 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 
 			case WordItem::Symbol::Rang: BUILD_OP2_WITH_LEVEL(11);
 
+			case WordItem::Symbol::Equl:
 			case WordItem::Symbol::DOrE:
 			case WordItem::Symbol::DAnE:
 			case WordItem::Symbol::PluE:
@@ -447,8 +448,7 @@ void Tree::build_命令(WordItem::Symbol const &now, Table &table) {
 			case WordItem::Symbol::AndE:
 			case WordItem::Symbol::XorE:
 			case WordItem::Symbol::OppE:
-			case WordItem::Symbol::PowE:
-			case WordItem::Symbol::Equl: BUILD_OP2_WITH_LEVEL2(12, 0);
+			case WordItem::Symbol::PowE: BUILD_OP2_WITH_LEVEL2(12, 0);
 
 			case WordItem::Symbol::RGet: BUILD_OP2_WITH_LEVEL(13);
 			default:

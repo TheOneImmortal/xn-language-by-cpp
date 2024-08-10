@@ -9,6 +9,7 @@
  */
 
 /*----------------include----------------*/
+#include <filesystem>
 #include <fstream>
 
 #include "../3rd/xn_lib/include_me.hh"  // IWYU pragma: keep
@@ -20,18 +21,18 @@ class CppGen {
 	using Item = table::TreeTableItem;
 
   public:
-	string const           &output_file_name;
-	table::TreeTable const &tree_table;
+	::std::filesystem::path const &output_file;
+	table::TreeTable const        &tree_table;
 
   private:
 	::std::fstream output;
 
   public:
-	CppGen(string const           &output_file_name,
-	       table::TreeTable const &tree_table)
-	    : output_file_name(output_file_name)
+	CppGen(::std::filesystem::path const &output_file,
+	       table::TreeTable const        &tree_table)
+	    : output_file(output_file)
 	    , tree_table(tree_table)
-	    , output(output_file_name, std::ios::out){};
+	    , output(output_file, std::ios::out){};
 
 	void gen();
 
@@ -40,5 +41,6 @@ class CppGen {
 	void gen(Item::FnDef const &node);
 };
 
-void cpp_gen(string output_file, table::TreeTable const &tree_table);
+void cpp_gen(::std::filesystem::path output_file,
+             table::TreeTable const &tree_table);
 }
